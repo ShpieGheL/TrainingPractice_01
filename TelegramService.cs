@@ -20,7 +20,7 @@ namespace TelegramBot
         public TelegramBotClient client;
         public NewsClient newsClient = new NewsClient(System.IO.File.ReadAllText("newstoken.txt"));
         public ConcurrentDictionary<long, int> States = new();
-        public Dictionary<long, int> rand = new Dictionary<long, int>();
+        public ConcurrentDictionary<long, int> rand = new();
 
         public void Start()
         {
@@ -53,7 +53,7 @@ namespace TelegramBot
                         News(msg);
                         break;
                     case "Случайное число":
-                        await client.SendTextMessageAsync(msg.Chat.Id, "Введите минимальное число:", replyToMessageId: msg.MessageId);
+                        await client.SendTextMessageAsync(msg.Chat.Id, "Введите минимальное число:", replyToMessageId: msg.MessageId, replyMarkup: GetNoButtons());
                         States.TryAdd(msg.Chat.Id, 2);
                         break;
                     case "Информация":
@@ -104,30 +104,40 @@ namespace TelegramBot
         private async void Weather(Message msg, int k)
         {
             string rs = "Не удаётся найти город";
+            string recomendation = "";
             try
             {
-                string url = $"http://api.openweathermap.org/data/2.5/weather?q={msg.Text}&lang=ru&units=metric&appid="+System.IO.File.ReadAllText("weathertoken.txt");
+                string url = $"http://api.openweathermap.org/data/2.5/weather?q={msg.Text}&lang=ru&units=metric&appid=" + System.IO.File.ReadAllText("weathertoken.txt");
                 using var httpClient = new HttpClient();
                 var response = await httpClient.GetAsync(url);
                 response.EnsureSuccessStatusCode();
                 var json = await response.Content.ReadAsStringAsync();
-                using var stream = new StreamReader(json);
-                rs = stream.ReadToEnd();
+                rs = json.ToString();
                 Rootobject wthr = JsonConvert.DeserializeObject<Rootobject>(rs);
-                if (wthr.main.temp > -3 && wthr.main.temp < 15)
+                if (wthr.main.temp > -5 && wthr.main.temp < 15)
+                {
                     await client.SendStickerAsync(msg.Chat.Id, "https://tlgrm.ru/_/stickers/b23/18d/b2318d70-5188-3faf-927d-b1be87d2e83f/17.webp");
-                if (wthr.main.temp < -3)
+                    recomendation = "Оденьтесь потеплее.";
+                }
+                if (wthr.main.temp < -5)
+                {
                     await client.SendStickerAsync(msg.Chat.Id, "https://tlgrm.ru/_/stickers/b23/18d/b2318d70-5188-3faf-927d-b1be87d2e83f/13.webp");
+                    recomendation = "Не выходите на улицу, возьмите кружку горячего чая, закутайтесь в одеяло и наслаждайтесь теплом.";
+                }
                 if (wthr.main.temp > 15)
+                {
                     await client.SendStickerAsync(msg.Chat.Id, "https://tlgrm.ru/_/stickers/b23/18d/b2318d70-5188-3faf-927d-b1be87d2e83f/12.webp");
-                rs = $"Погода в городе {wthr.name}:\n\nТемпература: {Math.Floor(wthr.main.temp)} ℃\nОщущается как: {Math.Floor(wthr.main.feels_like)} ℃\nДавление ртутного столба: {wthr.main.pressure} мм\nСкорость ветра: {wthr.wind.speed} км/ч";
+                    recomendation = "Оденьтесь полегче.";
+                }
+                rs = $"На данный момент в городе {wthr.name} {wthr.weather[0].description}:\n\nТемпература {Math.Floor(wthr.main.temp)}℃, ощущается как {Math.Floor(wthr.main.feels_like)}℃\nДавление ртутного столба: {wthr.main.pressure} мм\nСкорость ветра: {wthr.wind.speed} м/с";
                 RemoveStates(msg.Chat.Id);
             }
-            catch 
+            catch
             {
                 await client.SendStickerAsync(msg.Chat.Id, "https://tlgrm.ru/_/stickers/4dd/300/4dd300fd-0a89-3f3d-ac53-8ec93976495e/10.webp");
             }
             await client.SendTextMessageAsync(msg.Chat.Id, rs, replyToMessageId: msg.MessageId, replyMarkup: GetStandartButtons());
+            await client.SendTextMessageAsync(msg.Chat.Id, $"Рекомендация:\n{recomendation}", replyMarkup: GetStandartButtons());
         }
 
         private async void StartCount(Message msg)
@@ -143,7 +153,7 @@ namespace TelegramBot
                 RemoveStates(msg.Chat.Id);
                 States.TryAdd(msg.Chat.Id, 3);
                 await client.SendTextMessageAsync(msg.Chat.Id, "Введите максимальное число.");
-                rand.Add(msg.Chat.Id, Convert.ToInt32(msg.Text));
+                rand.TryAdd(msg.Chat.Id, Convert.ToInt32(msg.Text));
             }
         }
         private async void StopCount(Message msg)
@@ -154,8 +164,10 @@ namespace TelegramBot
                 if (Convert.ToInt32(msg.Text) >= rand[msg.Chat.Id])
                 {
                     RemoveStates(msg.Chat.Id);
-                    Random r = new Random();
+                    Random r = new();
+                    string status = "";
                     await client.SendTextMessageAsync(msg.Chat.Id, $"Какая удача! Ваше число: {r.Next(rand[msg.Chat.Id], Convert.ToInt32(msg.Text))}", replyMarkup: GetStandartButtons());
+                    rand.TryRemove(msg.Chat.Id, out var _);
                 }
                 else
                     await client.SendTextMessageAsync(msg.Chat.Id, "Максимальное число не может быть меньше минимального.", replyToMessageId: msg.MessageId);
@@ -184,6 +196,16 @@ namespace TelegramBot
                 {
                     new List<KeyboardButton>{ new KeyboardButton { Text = "Погода" }, new KeyboardButton { Text = "Новости" }},
                     new List<KeyboardButton>{ new KeyboardButton { Text = "Случайное число" }, new KeyboardButton { Text = "Информация"}}
+                }
+            };
+        }
+        private static IReplyMarkup GetNoButtons()
+        {
+            return new ReplyKeyboardMarkup()
+            {
+                Keyboard = new List<List<KeyboardButton>>
+                {
+
                 }
             };
         }

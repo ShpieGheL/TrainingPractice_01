@@ -22,6 +22,7 @@ namespace TelegramBot
         {
             var service = new TelegramService();
             service.Start();
+            Console.WriteLine("Нажмите Return для остановки работы");
             Console.ReadLine();
             service.Stop();
         }

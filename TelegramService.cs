@@ -4,13 +4,13 @@ using Newtonsoft.Json;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Net.Http;
 using Telegram.Bot;
 using Telegram.Bot.Args;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.ReplyMarkups;
+using System.IO;
 
 namespace TelegramBot
 {
@@ -21,44 +21,55 @@ namespace TelegramBot
         public NewsClient newsClient = new NewsClient(System.IO.File.ReadAllText("newstoken.txt"));
         public ConcurrentDictionary<long, int> States = new();
         public ConcurrentDictionary<long, int> rand = new();
-
+        public readonly IHttpClientFactory _httpClientFactory;
         public void Start()
         {
+            Console.WriteLine($"{DateTime.Now} Загрузка бота");
             client = new TelegramBotClient(token);
+            Console.WriteLine($"{DateTime.Now} Создание клиента");
             client.StartReceiving();
+            Console.WriteLine($"{DateTime.Now} Загрузка успешно завершена");
             client.OnMessage += MessageStatusChecker;
             client.OnMessage += MessageCommands;
         }
 
         public void Stop()
         {
+            Console.WriteLine($"{DateTime.Now} Остановка работы");
             client.StopReceiving();
+            Console.ReadKey();
         }
 
         private async void MessageStatusChecker(object sender, MessageEventArgs e)
         {
             var msg = e.Message;
+            Console.WriteLine($"{DateTime.Now} {msg.Chat.Id}: {msg.Text}");
             if (!States.ContainsKey(msg.Chat.Id))
                 switch (msg.Text)
                 {
                     case "Старт":
                         BotStart(msg);
                         RemoveStates(msg.Chat.Id);
+                        Console.WriteLine($"{DateTime.Now} Вызов команды Старт");
                         break;
                     case "Погода":
                         await client.SendTextMessageAsync(msg.Chat.Id, "Введите название города:", replyMarkup: GetSities(), replyToMessageId: msg.MessageId);
+                        Console.WriteLine($"{DateTime.Now} Вызов команды Погода");
                         States.TryAdd(msg.Chat.Id, 1);
+                        Console.WriteLine($"{DateTime.Now} {msg.Chat.Id} добавлен в список статусов со статусом 1");
                         break;
                     case "Новости":
                         News(msg);
                         break;
                     case "Случайное число":
                         await client.SendTextMessageAsync(msg.Chat.Id, "Введите минимальное число:", replyToMessageId: msg.MessageId, replyMarkup: GetNoButtons());
+                        Console.WriteLine($"{DateTime.Now} Вызов команды Случайное число");
                         States.TryAdd(msg.Chat.Id, 2);
+                        Console.WriteLine($"{DateTime.Now} {msg.Chat.Id} добавлен в список статусов со статусом 2");
                         break;
                     case "Информация":
                         await client.SendTextMessageAsync(msg.Chat.Id, "Команда Старт:\nОтмена всех команд.\n\nКоманда Погода:\nУзнать погоду на данный момент в любом городе.\n\nКоманда Новости:\nНовости по России на сервисе RT на данный момент.\n\nКоманда Случайное число:\nГенерация случайного числа.", replyToMessageId: msg.MessageId);
-                        States.TryAdd(msg.Chat.Id, 2);
+                        Console.WriteLine($"{DateTime.Now} Вызов команды Информация");
                         break;
                 }
         }
@@ -70,7 +81,7 @@ namespace TelegramBot
                 switch (state)
                 {
                     case 1:
-                        Weather(e.Message, 1);
+                        Weather(e.Message);
                         break;
                     case 2:
                         StartCount(e.Message);
@@ -78,42 +89,54 @@ namespace TelegramBot
                     case 3:
                         StopCount(e.Message);
                         break;
-                    case 4:
-                        Weather(e.Message, 2);
-                        break;
                 }
             }
         }
         private async void News(Message msg)
         {
+            Console.WriteLine($"{DateTime.Now} Вызов функции новости");
             try
             {
+                Console.WriteLine($"{DateTime.Now} Создание новостного клиента");
                 var result = await newsClient.FetchNewsFromSource("rt");
+                Console.WriteLine($"{DateTime.Now} Выбор ресурса");
                 if (result.ResponseStatus == ResponseStatus.Ok)
                 {
+                    Console.WriteLine($"{DateTime.Now} Статус ОК");
                     foreach (var article in result.Articles.Take(5))
                         await client.SendTextMessageAsync(msg.Chat.Id, article.Url);
                 }
+                else
+                {
+                    Console.WriteLine($"{DateTime.Now} Статус Error");
+                }
+                Console.WriteLine($"{DateTime.Now} Успешно!");
             }
             catch
             {
-
+                Console.WriteLine($"{DateTime.Now} Произошла ошибка");
             }
         }
         
-        private async void Weather(Message msg, int k)
+        private async void Weather(Message msg)
         {
+            Console.WriteLine($"{DateTime.Now} Вызов функции погоды");
             string rs = "Не удаётся найти город";
             string recomendation = "";
             try
             {
+                Console.WriteLine($"{DateTime.Now} Активация токена");
                 string url = $"http://api.openweathermap.org/data/2.5/weather?q={msg.Text}&lang=ru&units=metric&appid=" + System.IO.File.ReadAllText("weathertoken.txt");
-                using var httpClient = new HttpClient();
+                Console.WriteLine($"{DateTime.Now} Создание Http клиента");
+                HttpClient httpClient = _httpClientFactory.CreateClient();
                 var response = await httpClient.GetAsync(url);
+                Console.WriteLine($"{DateTime.Now} Получение данных");
                 response.EnsureSuccessStatusCode();
+                Console.WriteLine($"{DateTime.Now} Создание json");
                 var json = await response.Content.ReadAsStringAsync();
                 rs = json.ToString();
                 Rootobject wthr = JsonConvert.DeserializeObject<Rootobject>(rs);
+                Console.WriteLine($"{DateTime.Now} Десереализация json");
                 if (wthr.main.temp > -5 && wthr.main.temp < 15)
                 {
                     await client.SendStickerAsync(msg.Chat.Id, "https://tlgrm.ru/_/stickers/b23/18d/b2318d70-5188-3faf-927d-b1be87d2e83f/17.webp");
@@ -129,63 +152,71 @@ namespace TelegramBot
                     await client.SendStickerAsync(msg.Chat.Id, "https://tlgrm.ru/_/stickers/b23/18d/b2318d70-5188-3faf-927d-b1be87d2e83f/12.webp");
                     recomendation = "Оденьтесь полегче.";
                 }
+                Console.WriteLine($"{DateTime.Now} Вывод погоды");
                 rs = $"На данный момент в городе {wthr.name} {wthr.weather[0].description}:\n\nТемпература {Math.Floor(wthr.main.temp)}℃, ощущается как {Math.Floor(wthr.main.feels_like)}℃\nДавление ртутного столба: {wthr.main.pressure} мм\nСкорость ветра: {wthr.wind.speed} м/с";
                 RemoveStates(msg.Chat.Id);
+                await client.SendTextMessageAsync(msg.Chat.Id, rs, replyToMessageId: msg.MessageId, replyMarkup: GetStandartButtons());
+                await client.SendTextMessageAsync(msg.Chat.Id, $"Рекомендация:\n{recomendation}", replyMarkup: GetStandartButtons());
             }
             catch
             {
+                Console.WriteLine($"{DateTime.Now} Произошла ошибка");
                 await client.SendStickerAsync(msg.Chat.Id, "https://tlgrm.ru/_/stickers/4dd/300/4dd300fd-0a89-3f3d-ac53-8ec93976495e/10.webp");
+                await client.SendTextMessageAsync(msg.Chat.Id, rs, replyToMessageId: msg.MessageId, replyMarkup: GetStandartButtons());
             }
-            await client.SendTextMessageAsync(msg.Chat.Id, rs, replyToMessageId: msg.MessageId, replyMarkup: GetStandartButtons());
-            await client.SendTextMessageAsync(msg.Chat.Id, $"Рекомендация:\n{recomendation}", replyMarkup: GetStandartButtons());
+
         }
 
         private async void StartCount(Message msg)
         {
-            int i = Int32.MinValue;
-            try
+            Console.WriteLine($"{DateTime.Now} Вызов функции определения первого числа");
+            if (!int.TryParse(msg.Text, out var result))
             {
-                i = Convert.ToInt32(msg.Text);
+                await client.SendTextMessageAsync(msg.Chat.Id, "Невозможно преобразовать число.", replyToMessageId: msg.MessageId);
+                Console.WriteLine($"{DateTime.Now} Невозможно преобразовать число.");
             }
-            catch { await client.SendTextMessageAsync(msg.Chat.Id, "Невозможно преобразовать число.", replyToMessageId: msg.MessageId); }
-            if (i != Int32.MinValue)
+            else 
             {
+                Console.WriteLine($"{DateTime.Now} Удачное преобразование");
                 RemoveStates(msg.Chat.Id);
                 States.TryAdd(msg.Chat.Id, 3);
                 await client.SendTextMessageAsync(msg.Chat.Id, "Введите максимальное число.");
                 rand.TryAdd(msg.Chat.Id, Convert.ToInt32(msg.Text));
             }
+
         }
         private async void StopCount(Message msg)
         {
-            try
+            Console.WriteLine($"{DateTime.Now} Вызов функции определения второго числа");
+            if (!int.TryParse(msg.Text, out var result))
             {
-                Convert.ToInt32(msg.Text);
+                await client.SendTextMessageAsync(msg.Chat.Id, "Невозможно преобразовать число.", replyToMessageId: msg.MessageId);
+            }
+            else
+            {
+                Console.WriteLine($"{DateTime.Now} Удачное преобразование");
                 if (Convert.ToInt32(msg.Text) >= rand[msg.Chat.Id])
                 {
                     RemoveStates(msg.Chat.Id);
                     Random r = new();
-                    string status = "";
                     await client.SendTextMessageAsync(msg.Chat.Id, $"Какая удача! Ваше число: {r.Next(rand[msg.Chat.Id], Convert.ToInt32(msg.Text))}", replyMarkup: GetStandartButtons());
                     rand.TryRemove(msg.Chat.Id, out var _);
+                    Console.WriteLine($"{DateTime.Now} Вывод случайного числа");
                 }
-                else
-                    await client.SendTextMessageAsync(msg.Chat.Id, "Максимальное число не может быть меньше минимального.", replyToMessageId: msg.MessageId);
-            }
-            catch
-            {
-                await client.SendTextMessageAsync(msg.Chat.Id, "Невозможно преобразовать число.", replyToMessageId: msg.MessageId);
+                else { await client.SendTextMessageAsync(msg.Chat.Id, "Максимальное число не может быть меньше минимального.", replyToMessageId: msg.MessageId); Console.WriteLine("Максимальное число не может быть меньше минимального."); }
             }
         }
 
         private async void BotStart(Message msg)
         {
+            Console.WriteLine($"{DateTime.Now} Вызов функции старта бота");
             await client.SendTextMessageAsync(msg.Chat.Id, "Используйте выделенные кнопки или команды для взаимодействия с ботом.", replyMarkup: GetStandartButtons());
         }
 
-        private void RemoveStates(long m)
+        private void RemoveStates(long userid)
         {
-            States.TryRemove(m, out var _);
+            Console.WriteLine($"{DateTime.Now} Исключение из списка {userid}");
+            States.TryRemove(userid, out var _);
         }
 
         private static IReplyMarkup GetStandartButtons()

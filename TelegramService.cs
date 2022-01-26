@@ -10,18 +10,24 @@ using Telegram.Bot;
 using Telegram.Bot.Args;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.ReplyMarkups;
-using System.IO;
 
 namespace TelegramBot
 {
     public class TelegramService
     {
-        private string token { get; set; } = System.IO.File.ReadAllText("token.txt");
-        public TelegramBotClient client;
-        public NewsClient newsClient = new NewsClient(System.IO.File.ReadAllText("newstoken.txt"));
-        public ConcurrentDictionary<long, int> States = new();
-        public ConcurrentDictionary<long, int> rand = new();
-        public readonly IHttpClientFactory _httpClientFactory;
+        private string token { get; set; }
+        private TelegramBotClient client;
+        private NewsClient newsClient;
+        private string WToken;
+        private ConcurrentDictionary<long, int> States = new();
+        private ConcurrentDictionary<long, int> rand = new();
+        private readonly HttpClient httpClient = new HttpClient();
+
+        public TelegramService(Settings settings) {
+            token = settings.BotToken;
+            WToken = settings.WeatherToken;
+            newsClient = new NewsClient(settings.NewsToken);
+        } 
         public void Start()
         {
             Console.WriteLine($"{DateTime.Now} Загрузка бота");
@@ -126,9 +132,8 @@ namespace TelegramBot
             try
             {
                 Console.WriteLine($"{DateTime.Now} Активация токена");
-                string url = $"http://api.openweathermap.org/data/2.5/weather?q={msg.Text}&lang=ru&units=metric&appid=" + System.IO.File.ReadAllText("weathertoken.txt");
+                string url = $"http://api.openweathermap.org/data/2.5/weather?q={msg.Text}&lang=ru&units=metric&appid=" + WToken;
                 Console.WriteLine($"{DateTime.Now} Создание Http клиента");
-                HttpClient httpClient = _httpClientFactory.CreateClient();
                 var response = await httpClient.GetAsync(url);
                 Console.WriteLine($"{DateTime.Now} Получение данных");
                 response.EnsureSuccessStatusCode();

@@ -1,7 +1,23 @@
 ﻿using System;
+using Telegram.Bot;
+using Telegram.Bot.Args;
+using System.Net;
 using System.IO;
+using Newtonsoft.Json;
+using Telegram.Bot.Types.ReplyMarkups;
+using Telegram.Bot.Types;
+using System;
+using System.Collections.Generic;
+using System.Text;
+using System.IO;
+using System.Net;
+using System.Threading.Tasks;
+using Telegram.Bot;
+using Telegram.Bot.Args;
+using Telegram.Bot.Types.Enums;
+using Newtonsoft.Json;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
-using System.Text.Json;
 
 namespace TelegramBot
 {
@@ -13,69 +29,18 @@ namespace TelegramBot
                 .SetBasePath(Directory.GetCurrentDirectory())
                 .AddJsonFile("appsettings.json", optional: false);
             var config = builder.Build();
-            var conf = config.Get<Settings>();
-            builder = new ConfigurationBuilder()
-                .SetBasePath(Directory.GetCurrentDirectory())
-                .AddJsonFile("commands.json", optional: false);
-            config = builder.Build();
-            var conf1 = config.Get<Statuses>();
-            var service = new TelegramService(conf, conf1);
+            var myFirstClass = config.Get<Settings>();
+            var service = new TelegramService(myFirstClass);
             service.Start();
-            int status = 0;
-            string[] statuses = new string[] {"true", "true", "true", "true", "true" };
-            while (true)
-            {
-                string c = Console.ReadLine();
-                if (c.ToLower() == "stop")
-                {
-                    break;
-                }
-                else
-                {
-                    if (int.TryParse(c, out var result) == true)
-                    {
-                        if (Convert.ToInt16(c) >= 1 && Convert.ToInt16(c) <= 5)
-                        {
-                            status = Convert.ToInt16(c);
-                            Console.WriteLine($"Выбрана команда №{c}.");
-                        }
-                    }
-                    else if (c.ToLower() == "false" || c.ToLower() == "true")
-                    {
-                        statuses[status - 1] = c.ToLower();
-                        Console.WriteLine($"Значение {c} успешно установлено.");
-                        var statuses1 = new Statuses
-                        {
-                            Status1 = statuses[0],
-                            Status2 = statuses[1],
-                            Status3 = statuses[2],
-                            Status4 = statuses[3],
-                            Status5 = statuses[4]
-                        };
-                        using FileStream createStream = File.Create("commands.json");
-                        JsonSerializer.Serialize(createStream, statuses1);
-                        createStream.Dispose();
-                        Console.WriteLine(File.ReadAllText("commands.json"));
-                    }
-                }
-            }
+            Console.WriteLine("Нажмите Return для остановки работы");
+            Console.ReadLine();
             service.Stop();
         }
     }
-
     public class Settings
     {
         public string BotToken { get; set; }
         public string NewsToken { get; set; }
         public string WeatherToken { get; set; }
-    }
-
-    public class Statuses
-    {
-        public string Status1 { get; set; }
-        public string Status2 { get; set; }
-        public string Status3 { get; set; }
-        public string Status4 { get; set; }
-        public string Status5 { get; set; }
     }
 }

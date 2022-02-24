@@ -1,1 +1,1 @@
-# This if my Telegram bot for training practice.
+# This is my Telegram bot for training practice.

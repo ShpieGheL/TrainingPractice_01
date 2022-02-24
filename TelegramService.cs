@@ -10,7 +10,6 @@ using Telegram.Bot;
 using Telegram.Bot.Args;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.ReplyMarkups;
-using System.IO;
 
 namespace TelegramBot
 {
@@ -50,7 +49,7 @@ namespace TelegramBot
 
         public void Stop()
         {
-            Console.WriteLine($"{DateTime.Now} Остановка работы");
+            Console.WriteLine($"{DateTime.Now} Остановка работы, нажмите Return.");
             client.StopReceiving();
             Console.ReadKey();
         }

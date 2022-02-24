@@ -10,6 +10,7 @@ using Telegram.Bot;
 using Telegram.Bot.Args;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.ReplyMarkups;
+using System.IO;
 
 namespace TelegramBot
 {
@@ -252,7 +253,7 @@ namespace TelegramBot
 
         private async void InfoVoid(Message msg)
         {
-            await client.SendTextMessageAsync(msg.Chat.Id, "Команда Старт:\nОтмена всех команд.\n\nКоманда Погода:\nУзнать погоду на данный момент в любом городе.\n\nКоманда Новости:\nНовости по России на сервисе RT на данный момент.\n\nКоманда Случайное число:\nГенерация случайного числа.", replyToMessageId: msg.MessageId);
+            await client.SendTextMessageAsync(msg.Chat.Id, System.IO.File.ReadAllText("InfoBot.txt"), replyToMessageId: msg.MessageId);
             Console.WriteLine($"{DateTime.Now} Вызов команды Информация");
         }
 

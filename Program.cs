@@ -22,8 +22,7 @@ namespace TelegramBot
             var service = new TelegramService(conf, conf1);
             service.Start();
             int status = 0;
-            var statuses2 = conf1;
-            string[] statuses = new string[] { statuses2.Status1, statuses2.Status2, statuses2.Status3, statuses2.Status4, statuses2.Status5 };
+            string[] statuses = new string[] { conf1.Status1, conf1.Status2, conf1.Status3, conf1.Status4, conf1.Status5 };
             while (true)
             {
                 string c = Console.ReadLine();
@@ -69,6 +68,7 @@ namespace TelegramBot
         public string BotToken { get; set; }
         public string NewsToken { get; set; }
         public string WeatherToken { get; set; }
+        public string ExToken { get; set; }
     }
 
     public class Statuses

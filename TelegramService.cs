@@ -19,8 +19,8 @@ namespace TelegramBot
         private TelegramBotClient client;
         private NewsClient newsClient;
         private string WToken;
+        private string EToken;
         private ConcurrentDictionary<long, int> States = new();
-        private ConcurrentDictionary<long, int> rand = new();
         private readonly HttpClient httpClient = new HttpClient();
         string[] Statuses = new string[5];
 
@@ -28,6 +28,7 @@ namespace TelegramBot
         {
             token = settings.BotToken;
             WToken = settings.WeatherToken;
+            EToken = settings.ExToken;
             newsClient = new NewsClient(settings.NewsToken);
             Statuses[0] = statuses.Status1;
             Statuses[1] = statuses.Status2;
@@ -59,9 +60,9 @@ namespace TelegramBot
             var msg = e.Message;
             Console.WriteLine($"{DateTime.Now} {msg.Chat.Id}: {msg.Text}");
             if (!States.ContainsKey(msg.Chat.Id))
-                switch (msg.Text)
+                switch (msg.Text.ToLower())
                 {
-                    case "Старт":
+                    case "/start":
                         if (Statuses[0] == "true")
                         {
                             StartVoid(msg);
@@ -71,7 +72,7 @@ namespace TelegramBot
                             Err(msg.Text, msg);
                         }
                         break;
-                    case "Погода":
+                    case "/weather":
                         if (Statuses[1] == "true")
                         {
                             WeatherVoid1(msg);
@@ -81,7 +82,7 @@ namespace TelegramBot
                             Err(msg.Text, msg);
                         }
                         break;
-                    case "Новости":
+                    case "/news":
                         if (Statuses[2] == "true")
                         {
                             News(msg);
@@ -91,17 +92,17 @@ namespace TelegramBot
                             Err(msg.Text, msg);
                         }
                         break;
-                    case "Случайное число":
+                    case "/exchange":
                         if (Statuses[3] == "true")
                         {
-                            RandomStatementVoid1(msg);
+                            ExchangeVoid1(msg);
                         }
                         else
                         {
                             Err(msg.Text, msg);
                         }
                         break;
-                    case "Информация":
+                    case "/info":
                         if (Statuses[4] == "true")
                         {
                             InfoVoid(msg);
@@ -109,6 +110,20 @@ namespace TelegramBot
                         else
                         {
                             Err(msg.Text, msg);
+                        }
+                        break;
+                    default:
+                        string finalstring = "";
+                        if (msg.Text.ToLower().Contains("/random "))
+                        {
+                            foreach (char c in msg.Text.Take(8))
+                            {
+                                finalstring += c;
+                            }
+                            if (finalstring.ToLower()=="/random ")
+                            {
+                                RandomStatementVoid(msg);
+                            }
                         }
                         break;
                 }
@@ -167,6 +182,7 @@ namespace TelegramBot
                 RemoveStates(msg.Chat.Id);
                 await client.SendTextMessageAsync(msg.Chat.Id, rs, replyToMessageId: msg.MessageId, replyMarkup: GetStandartButtons());
                 await client.SendTextMessageAsync(msg.Chat.Id, $"Рекомендация:\n{recomendation}", replyMarkup: GetStandartButtons());
+                await client.SendLocationAsync(msg.Chat.Id, wthr.coord.lat, wthr.coord.lon, replyToMessageId: msg.MessageId, replyMarkup: GetStandartButtons());
             }
             catch
             {
@@ -202,51 +218,73 @@ namespace TelegramBot
             }
         }
 
-        private async void RandomStatementVoid1(Message msg)
+        private async void ExchangeVoid1(Message msg)
         {
-            await client.SendTextMessageAsync(msg.Chat.Id, "Введите минимальное число:", replyToMessageId: msg.MessageId, replyMarkup: GetNoButtons());
-            Console.WriteLine($"{DateTime.Now} Вызов команды Случайное число");
+            await client.SendTextMessageAsync(msg.Chat.Id, "Введите валюту.", replyToMessageId: msg.MessageId, replyMarkup: GetExchange());
             States.TryAdd(msg.Chat.Id, 2);
             Console.WriteLine($"{DateTime.Now} {msg.Chat.Id} добавлен в список статусов со статусом 2");
         }
 
-        private async void RandomStatementVoid2(Message msg)
+        private async void ExchangeVoid2(Message msg)
         {
-            Console.WriteLine($"{DateTime.Now} Вызов функции определения первого числа");
-            if (!int.TryParse(msg.Text, out var result))
+            string rs = "Не удаётся найти валюту.";
+            try
             {
-                await client.SendTextMessageAsync(msg.Chat.Id, "Невозможно преобразовать число.", replyToMessageId: msg.MessageId);
-                Console.WriteLine($"{DateTime.Now} Невозможно преобразовать число.");
+                Console.WriteLine($"{DateTime.Now} Активация токена");
+                string url = $"https://v6.exchangerate-api.com/v6/" + EToken + $"/pair/{msg.Text}/RUB";
+                Console.WriteLine($"{DateTime.Now} Создание Http клиента");
+                var response = await httpClient.GetAsync(url);
+                Console.WriteLine($"{DateTime.Now} Получение данных");
+                response.EnsureSuccessStatusCode();
+                Console.WriteLine($"{DateTime.Now} Создание json");
+                var json = await response.Content.ReadAsStringAsync();
+                rs = json.ToString();
+                Rootobject1 exc = JsonConvert.DeserializeObject<Rootobject1>(rs);
+                Console.WriteLine($"{DateTime.Now} Десереализация json");
+                rs = $"Курс {msg.Text} к RUB: {exc.conversion_rate}";
             }
-            else
-            {
-                Console.WriteLine($"{DateTime.Now} Удачное преобразование");
-                RemoveStates(msg.Chat.Id);
-                States.TryAdd(msg.Chat.Id, 3);
-                await client.SendTextMessageAsync(msg.Chat.Id, "Введите максимальное число.");
-                rand.TryAdd(msg.Chat.Id, Convert.ToInt32(msg.Text));
-            }
-
+            catch { }
+            RemoveStates(msg.Chat.Id);
+            await client.SendTextMessageAsync(msg.Chat.Id, rs, replyToMessageId: msg.MessageId, replyMarkup: GetStandartButtons());
         }
-        private async void RandomStatementVoid3(Message msg)
+
+        private async void RandomStatementVoid(Message msg)
         {
-            Console.WriteLine($"{DateTime.Now} Вызов функции определения второго числа");
-            if (!int.TryParse(msg.Text, out var result))
+            string txt = msg.Text.ToLower().Replace("/random ", "");
+            int ist = 0;
+            string one = "", two = "";
+            foreach (char c in txt)
             {
-                await client.SendTextMessageAsync(msg.Chat.Id, "Невозможно преобразовать число.", replyToMessageId: msg.MessageId);
+                if (c == '{' || c == '}' || c == ':')
+                {
+                    ist++;
+                }
+                else
+                {
+                    if (ist == 1)
+                    {
+                        one += c;
+                    }
+                    if (ist == 2)
+                    {
+                        two += c;
+                    }
+                    if (ist == 3)
+                    {
+                        break;
+                    }
+                }
+            }
+            if (!int.TryParse(one, out var _) || !int.TryParse(two, out var _))
+            {
+                await client.SendTextMessageAsync(msg.Chat.Id, "Не удаётся преобразовать числа.", replyToMessageId: msg.MessageId, replyMarkup: GetStandartButtons());
+                Console.WriteLine($"{DateTime.Now} Не удаётся преобразовать числа.");
             }
             else
             {
-                Console.WriteLine($"{DateTime.Now} Удачное преобразование");
-                if (Convert.ToInt32(msg.Text) >= rand[msg.Chat.Id])
-                {
-                    RemoveStates(msg.Chat.Id);
-                    Random r = new();
-                    await client.SendTextMessageAsync(msg.Chat.Id, $"Какая удача! Ваше число: {r.Next(rand[msg.Chat.Id], Convert.ToInt32(msg.Text))}", replyMarkup: GetStandartButtons());
-                    rand.TryRemove(msg.Chat.Id, out var _);
-                    Console.WriteLine($"{DateTime.Now} Вывод случайного числа");
-                }
-                else { await client.SendTextMessageAsync(msg.Chat.Id, "Максимальное число не может быть меньше минимального.", replyToMessageId: msg.MessageId); Console.WriteLine("Максимальное число не может быть меньше минимального."); }
+                Random r = new Random();
+                await client.SendTextMessageAsync(msg.Chat.Id, $"Ваше число: {r.Next(Convert.ToInt32(one), Convert.ToInt32(two))}", replyToMessageId: msg.MessageId, replyMarkup: GetStandartButtons());
+                Console.WriteLine($"{DateTime.Now} Вызов команды случайного числа.");
             }
         }
 
@@ -266,14 +304,12 @@ namespace TelegramBot
                         WeatherVoid2(e.Message);
                         break;
                     case 2:
-                        RandomStatementVoid2(e.Message);
-                        break;
-                    case 3:
-                        RandomStatementVoid3(e.Message);
+                        ExchangeVoid2(e.Message);
                         break;
                 }
             }
         }
+
         private async void Err(string er, Message msg)
         {
             await client.SendTextMessageAsync(msg.Chat.Id, "К сожалению данная функция временно отключена.", replyMarkup: GetStandartButtons());
@@ -292,8 +328,7 @@ namespace TelegramBot
             {
                 Keyboard = new List<List<KeyboardButton>>
                 {
-                    new List<KeyboardButton>{ new KeyboardButton { Text = "Погода" }, new KeyboardButton { Text = "Новости" }},
-                    new List<KeyboardButton>{ new KeyboardButton { Text = "Случайное число" }, new KeyboardButton { Text = "Информация"}}
+                    new List<KeyboardButton>{ new KeyboardButton { Text = "/Weather" }, new KeyboardButton { Text = "/Info" }, new KeyboardButton { Text = "/News" }, new KeyboardButton { Text = "/Exchange" }}
                 }
             };
         }
@@ -314,8 +349,24 @@ namespace TelegramBot
             {
                 Keyboard = new List<List<KeyboardButton>>
                 {
-                    new List<KeyboardButton>{ new KeyboardButton { Text = "Москва" }, new KeyboardButton { Text = "Санкт-Петербург" }, new KeyboardButton { Text = "Новосибирск" }, new KeyboardButton { Text = "Екатеринбург" }, new KeyboardButton { Text = "Казань" }, new KeyboardButton { Text = "Нижний Новгород" }, new KeyboardButton { Text = "Челябинск" }},
-                    new List<KeyboardButton>{ new KeyboardButton { Text = "Омск" }, new KeyboardButton { Text = "Самара" }, new KeyboardButton { Text = "Ростов-на-Дону" }, new KeyboardButton { Text = "Уфа" }, new KeyboardButton { Text = "Красноярск" }, new KeyboardButton { Text = "Пермь" }, new KeyboardButton { Text = "Воронеж" } }
+                    new List<KeyboardButton>{ new KeyboardButton { Text = "Санкт-Петербург" }},
+                    new List<KeyboardButton>{ new KeyboardButton { Text = "Таллин" }},
+                    new List<KeyboardButton>{ new KeyboardButton { Text = "Пори" }},
+                    new List<KeyboardButton>{ new KeyboardButton { Text = "Карлеби" }},
+                    new List<KeyboardButton>{ new KeyboardButton { Text = "Нарва" }},
+                    new List<KeyboardButton>{ new KeyboardButton { Text = "Москва" }}
+                }
+            };
+        }
+        private static IReplyMarkup GetExchange()
+        {
+            return new ReplyKeyboardMarkup
+            {
+                Keyboard = new List<List<KeyboardButton>>
+                {
+                    new List<KeyboardButton>{ new KeyboardButton { Text = "EUR" }},
+                    new List<KeyboardButton>{ new KeyboardButton { Text = "USD" }},
+                    new List<KeyboardButton>{ new KeyboardButton { Text = "UAH" }}
                 }
             };
         }
